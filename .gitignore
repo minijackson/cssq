@@ -26,3 +26,17 @@
 *.exe
 *.out
 *.app
+
+### Vim ###
+[._]*.s[a-w][a-z]
+[._]s[a-w][a-z]
+*.un~
+Session.vim
+.netrwhist
+*~
+
+# Created by https://www.gitignore.io
+
+.clang_complete
+cssq
+tags
