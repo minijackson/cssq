@@ -13,6 +13,9 @@
 Application::Application(int argc, char* argv[]) : execName(argv[0]) {
 	if(argc > 1) {
 		parseOpts(argc, argv);
+	} else {
+		std::cerr << "You must specify a selector" << std::endl;
+		exit(EX_USAGE);
 	}
 }
 
@@ -54,14 +57,14 @@ void Application::parseOpts(int argc, char* argv[]) {
 		switch(option) {
 			case 'h':
 				programMode = HELP;
-				break;
+				return;
 			case 'V':
 				programMode = VERSION;
-				break;
+				return;
 			case '?':
 			case ':':
 				programMode = CLI_ERROR;
-				break;
+				return;
 			default:
 				exit(-1);
 		}
@@ -128,7 +131,7 @@ void Application::select() {
 				} else if(size == -1) {
 					// TODO
 					std::cerr << "To be implemented (pipes)" << std::endl;
-					eixt(EX_SOFTWARE);
+					exit(EX_SOFTWARE);
 				} else {
 					std::cerr << "Error: wrong file size" << std::endl;
 					exit(EX_IOERR);
