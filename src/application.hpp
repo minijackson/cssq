@@ -15,7 +15,7 @@ private:
 	void printHelp() const;
 	void printVersion() const;
 
-	void select();
+	int select();
 
 	std::string execName;
 	std::string selector;

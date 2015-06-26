@@ -10,12 +10,14 @@
 #include <hcxselect.h>
 #include <tinyxml2.h>
 
+#include <sys/stat.h>
+
 Application::Application(int argc, char* argv[]) : execName(argv[0]) {
 	if(argc > 1) {
 		parseOpts(argc, argv);
 	} else {
-		std::cerr << "You must specify a selector" << std::endl;
-		exit(EX_USAGE);
+		std::cerr << "You must specify a selector." << std::endl;
+		programMode = CLI_ERROR;
 	}
 }
 
@@ -32,8 +34,7 @@ int Application::exec() {
 			          << execName << " --help' for more informations" << std::endl;
 			return EX_USAGE;
 		case NORMAL:
-			select();
-			return 0;
+			return select();
 		default:
 			std::cerr << "Fatal error: wrong value of program mode" << std::endl;
 	}
@@ -72,7 +73,8 @@ void Application::parseOpts(int argc, char* argv[]) {
 
 	if(optind == argc) {
 		std::cerr << "You must specify a selector." << std::endl;
-		exit(64);
+		programMode = CLI_ERROR;
+		return;
 	}
 
 	selector = std::string(argv[optind++]);
@@ -103,7 +105,7 @@ void Application::printVersion() const {
 	std::cout << "CSSQ version 1.0~alpha" << std::endl;
 }
 
-void Application::select() {
+int Application::select() {
 	for(std::string const& filename : filenames) {
 
 		std::string fileContent;
@@ -115,31 +117,52 @@ void Application::select() {
 			}
 			fileContent = ss.str();
 		} else {
-			std::ifstream file(filename, std::ifstream::binary);
+			struct stat st;
+			if(stat(filename.c_str(), &st) < 0) {
+				std::cerr << "No such file or directory: " << filename << std::endl;
+				return EX_NOINPUT;
+			}
+
+			std::ifstream file(filename);
 
 			if(file) {
-				file.seekg(0, file.end);
-				int size = file.tellg();
-				file.seekg(0, file.beg);
+				if(S_ISREG(st.st_mode)) {
+					file.seekg(0, file.end);
+					int size = file.tellg();
+					file.seekg(0, file.beg);
 
-				if(size > 0) {
+					if(size == 0) {
+						return 0;
+					}
+
 					fileContent.resize(size);
-					char* begin = &*fileContent.begin();
+					char* fileContentBegin = &*fileContent.begin();
 
-					file.read(begin, size);
+					file.read(fileContentBegin, size);
 					file.close();
-				} else if(size == -1) {
-					// TODO
-					std::cerr << "To be implemented (pipes)" << std::endl;
-					exit(EX_SOFTWARE);
+				} else if(S_ISFIFO(st.st_mode)) {
+					std::ostringstream ss;
+
+					std::string line;
+					std::getline(file, line);
+
+					while(!file.eof()) {
+						ss << line << "\n";
+						std::getline(file, line);
+					}
+
+					file.close();
+
+					fileContent = ss.str();
 				} else {
-					std::cerr << "Error: wrong file size" << std::endl;
-					exit(EX_IOERR);
+					std::cerr << "Unknown file type" << std::endl;
+					file.close();
+					return EX_IOERR;
 				}
 
 			} else {
 				std::cerr << "Error while opening file: " << filename << std::endl;
-				exit(EX_NOINPUT);
+				return EX_NOINPUT;
 			}
 		}
 
@@ -160,4 +183,6 @@ void Application::select() {
 		}
 
 	}
+
+	return 0;
 }
