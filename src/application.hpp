@@ -10,12 +10,15 @@ public:
 	int exec();
 
 private:
-	void parseOpts(int argc, char* argv[]);
+	void parseOpts();
 
 	void printHelp() const;
 	void printVersion() const;
 
-	int select();
+	void select();
+
+	int argc;
+	char** argv;
 
 	std::string execName;
 	std::string selector;
@@ -23,8 +26,7 @@ private:
 	enum ProgramMode {
 		NORMAL,
 		HELP,
-		VERSION,
-		CLI_ERROR
+		VERSION
 	} programMode = NORMAL;
 };
 

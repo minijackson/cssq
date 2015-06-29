@@ -1,10 +1,15 @@
 #include "application.hpp"
 
+#include "exceptions/fatal_exception.hpp"
+#include "exceptions/cli_exception.hpp"
+#include "exceptions/no_input_exception.hpp"
+#include "exceptions/unknown_file_type_exception.hpp"
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <cerrno>
 
-#include <sysexits.h>
 #include <getopt.h>
 #include <htmlcxx/html/ParserDom.h>
 #include <hcxselect.h>
@@ -12,16 +17,18 @@
 
 #include <sys/stat.h>
 
-Application::Application(int argc, char* argv[]) : execName(argv[0]) {
-	if(argc > 1) {
-		parseOpts(argc, argv);
-	} else {
-		std::cerr << "You must specify a selector." << std::endl;
-		programMode = CLI_ERROR;
-	}
+Application::Application(int argc, char* argv[])
+	: argc(argc), argv(argv), execName(argv[0]) {
 }
 
 int Application::exec() {
+	try {
+		parseOpts();
+	} catch (FatalException e) {
+		std::cerr << e.what() << std::endl;
+		return e.getCode().value();
+	}
+
 	switch(programMode) {
 		case HELP:
 			printHelp();
@@ -29,20 +36,28 @@ int Application::exec() {
 		case VERSION:
 			printVersion();
 			return 0;
-		case CLI_ERROR:
-			std::cerr << "Error while parsing command line options. Try `"
-			          << execName << " --help' for more informations" << std::endl;
-			return EX_USAGE;
 		case NORMAL:
-			return select();
+			try {
+				select();
+			} catch (FatalException e) {
+				std::cerr << "Error: " << e.what() << std::endl;
+				return e.getCode().value();
+			}
+			break;
 		default:
-			std::cerr << "Fatal error: wrong value of program mode" << std::endl;
+			std::cerr << "Fatal error: wrong value of program mode:" << std::endl;
+			return -1;
 	}
 
 	return 0;
 }
 
-void Application::parseOpts(int argc, char* argv[]) {
+void Application::parseOpts() {
+	if(argc <= 1) {
+		throw CliException("You didn't specify a selector.\n"
+				"Usage: " + execName + " [options] selector [files]");
+	}
+
 	static struct option longOptions[] = {
 		{"help"   , no_argument, 0, 'h'},
 		{"version", no_argument, 0, 'V'},
@@ -64,7 +79,8 @@ void Application::parseOpts(int argc, char* argv[]) {
 				return;
 			case '?':
 			case ':':
-				programMode = CLI_ERROR;
+				throw CliException("Usage: " + execName + " [options] selector [files]"
+						"Try `" + execName + " --help' for more informations");
 				return;
 			default:
 				exit(-1);
@@ -72,8 +88,8 @@ void Application::parseOpts(int argc, char* argv[]) {
 	}
 
 	if(optind == argc) {
-		std::cerr << "You must specify a selector." << std::endl;
-		programMode = CLI_ERROR;
+		throw CliException("You didn't specify a selector.\n"
+				"Usage: " + execName + " [options] selector [files]");
 		return;
 	}
 
@@ -102,10 +118,10 @@ void Application::printHelp() const {
 }
 
 void Application::printVersion() const {
-	std::cout << "CSSQ version 1.0~alpha" << std::endl;
+	std::cout << "CSSQ version 0.2" << std::endl;
 }
 
-int Application::select() {
+void Application::select() {
 	for(std::string const& filename : filenames) {
 
 		std::string fileContent;
@@ -119,8 +135,7 @@ int Application::select() {
 		} else {
 			struct stat st;
 			if(stat(filename.c_str(), &st) < 0) {
-				std::cerr << "No such file or directory: " << filename << std::endl;
-				return EX_NOINPUT;
+				throw NoInputException(filename);
 			}
 
 			std::ifstream file(filename);
@@ -132,7 +147,7 @@ int Application::select() {
 					file.seekg(0, file.beg);
 
 					if(size == 0) {
-						return 0;
+						return;
 					}
 
 					fileContent.resize(size);
@@ -155,14 +170,12 @@ int Application::select() {
 
 					fileContent = ss.str();
 				} else {
-					std::cerr << "Unknown file type" << std::endl;
 					file.close();
-					return EX_IOERR;
+					throw UnknownFileTypeException();
 				}
 
 			} else {
-				std::cerr << "Error while opening file: " << filename << std::endl;
-				return EX_NOINPUT;
+				throw NoInputException(filename);
 			}
 		}
 
@@ -173,7 +186,7 @@ int Application::select() {
 		try {
 			s= s.select(selector);
 		} catch (hcxselect::ParseException e) {
-			std::cerr << "Parse error." << std::endl;
+			std::cerr << "Parse error: " << e.what() << std::endl;
 		} catch (...) {
 			std::cerr << "Error." << std::endl;
 		}
@@ -181,8 +194,5 @@ int Application::select() {
 		for(auto it = s.begin() ; it != s.end() ; ++it) {
 			std::cout << fileContent.substr((*it)->data.offset(), (*it)->data.length()) << std::endl;
 		}
-
 	}
-
-	return 0;
 }
