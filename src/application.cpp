@@ -61,11 +61,12 @@ void Application::parseOpts() {
 	static struct option longOptions[] = {
 		{"help"   , no_argument, 0, 'h'},
 		{"version", no_argument, 0, 'V'},
+		{"inner"  , no_argument, 0, 'i'},
 		{0        , 0          , 0,  0 }
 	};
 
 	int option, optionIndex;
-	while((option = getopt_long(argc, argv, "hV",
+	while((option = getopt_long(argc, argv, "hVi",
 	                            longOptions, &optionIndex))) {
 		if(option == -1)
 			break;
@@ -77,6 +78,9 @@ void Application::parseOpts() {
 			case 'V':
 				programMode = VERSION;
 				return;
+			case 'i':
+				selectInnerText = true;
+				break;
 			case '?':
 			case ':':
 				throw CliException("Usage: " + execName + " [options] selector [files]"
@@ -114,6 +118,7 @@ void Application::printHelp() const {
 	             "Options:\n\n"
 	             "  -h, --help         Display this help and exit.\n"
 	             "  -V, --version      Display version information and exit.\n"
+	             "  -u, --inner        Select the inner text.\n"
 	          << std::endl;
 }
 
@@ -192,7 +197,13 @@ void Application::select() {
 		}
 
 		for(auto it = s.begin() ; it != s.end() ; ++it) {
-			std::cout << fileContent.substr((*it)->data.offset(), (*it)->data.length()) << std::endl;
+			if(selectInnerText) {
+				size_t skip  = (*it)->data.text().size(),
+				       trail = (*it)->data.closingText().size();
+				std::cout << fileContent.substr((*it)->data.offset() + skip, (*it)->data.length() - skip - trail) << std::endl;
+			} else {
+				std::cout << fileContent.substr((*it)->data.offset(), (*it)->data.length()) << std::endl;
+			}
 		}
 	}
 }

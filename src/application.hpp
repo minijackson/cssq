@@ -28,6 +28,7 @@ private:
 		HELP,
 		VERSION
 	} programMode = NORMAL;
+	bool selectInnerText = false;
 };
 
 #endif
